@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# YOLO model
+best.onnx
+
+# Saved detections
+evidence/
+
+# VS Code
+.vscode/
