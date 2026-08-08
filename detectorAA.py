@@ -5,9 +5,9 @@ import serial
 import time
 import os
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+# -----------------------------
+# SETTINGS
+# -----------------------------
 
 MODEL = "best.onnx"
 
@@ -17,100 +17,93 @@ CLASS_NAMES = [
     "phone"
 ]
 
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.60
 NMS_THRESHOLD = 0.45
 
 LEFT_LIMIT = 0.35
 RIGHT_LIMIT = 0.65
 
 STOP_AREA = 15000
-STOP_CONFIRMATION = 3
 
-SAVE_FOLDER = "evidence"
+# -----------------------------
+# TARGET SELECTION
+# -----------------------------
 
-os.makedirs(SAVE_FOLDER, exist_ok=True)
+print()
+print("=" * 45)
+print("          SearchBot Target Selection")
+print("=" * 45)
+print()
 
-# ============================================================
-# ARDUINO
-# ============================================================
+for i, name in enumerate(CLASS_NAMES, start=1):
+    print(f"{i}. {name}")
 
-ARDUINO = False
+print()
 
-try:
+while True:
 
-    ser = serial.Serial(
-        "/dev/ttyUSB0",
-        9600,
-        dsrdtr=False,
-        rtscts=False
-    )
+    choice = input("Choose an object to search for: ").strip()
 
-    ser.dtr = False
-    ser.rts = False
+    if choice in ["1", "2", "3"]:
+        target_class_id = int(choice) - 1
+        target_object = CLASS_NAMES[target_class_id]
+        break
 
-    time.sleep(2)
+    print("Invalid choice. Please enter 1, 2, or 3.")
 
-    ARDUINO = True
+print()
+print(f"Target selected: {target_object}")
+print()
 
-    print("Arduino connected.")
+# -----------------------------
+# SERIAL
+# -----------------------------
 
-except:
-
-    print("Arduino not detected.")
-    print("Running in Vision-Only mode.")
-
-# ============================================================
-# ONNX OPTIMIZATION
-# ============================================================
-
-session_options = ort.SessionOptions()
-
-session_options.graph_optimization_level = (
-    ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+ser = serial.Serial(
+    "/dev/ttyUSB0",
+    9600,
+    dsrdtr=False,
+    rtscts=False
 )
 
-session = ort.InferenceSession(
-    MODEL,
-    sess_options=session_options
-)
+ser.dtr = False
+ser.rts = False
 
+time.sleep(2)
+
+# -----------------------------
+# YOLO
+# -----------------------------
+
+session = ort.InferenceSession(MODEL)
 input_name = session.get_inputs()[0].name
 
-print("Model loaded successfully.")
+print("Model loaded.")
 
-# ============================================================
+# -----------------------------
 # CAMERA
-# ============================================================
+# -----------------------------
 
-cap = cv2.VideoCapture(
-    0,
-    cv2.CAP_V4L2
-)
-
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-cap.set(
-    cv2.CAP_PROP_FOURCC,
-    cv2.VideoWriter_fourcc(*"MJPG")
-)
+cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
-
-    print("Cannot open camera.")
+    print("Cannot open camera")
+    ser.close()
     exit()
 
 print("Camera started.")
+print(f"Searching for: {target_object}")
+print()
 
-# ============================================================
-# VARIABLES
-# ============================================================
+# -----------------------------
+# EVIDENCE FOLDER
+# -----------------------------
 
-stop_counter = 0
-lost_counter = 0
-# ============================================================
+os.makedirs("evidence", exist_ok=True)
+
+# -----------------------------
 # MAIN LOOP
-# ============================================================
+# -----------------------------
 
 try:
 
@@ -127,26 +120,47 @@ try:
 
         h, w = image.shape[:2]
 
-        # ----------------------------------------------------
+        # -----------------------------
         # PREPROCESS
-        # ----------------------------------------------------
+        # -----------------------------
 
         img = cv2.resize(image, (320, 320))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        img = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2RGB
+        )
+
         img = img.astype(np.float32) / 255.0
-        img = np.transpose(img, (2, 0, 1))
-        img = np.expand_dims(img, 0)
 
-        # ----------------------------------------------------
+        img = np.transpose(
+            img,
+            (2, 0, 1)
+        )
+
+        img = np.expand_dims(
+            img,
+            0
+        )
+
+        # -----------------------------
         # INFERENCE
-        # ----------------------------------------------------
+        # -----------------------------
 
-        output = session.run(None, {input_name: img})[0]
+        output = session.run(
+            None,
+            {input_name: img}
+        )[0]
+
         output = output.squeeze().T
 
         boxes = []
         scores = []
         class_ids = []
+
+        # -----------------------------
+        # PROCESS DETECTIONS
+        # -----------------------------
 
         for row in output:
 
@@ -156,19 +170,47 @@ try:
 
             class_id = np.argmax(class_scores)
 
-            confidence = float(class_scores[class_id])
+            confidence = float(
+                class_scores[class_id]
+            )
 
             if confidence < CONFIDENCE_THRESHOLD:
                 continue
 
-            left = int((x - bw / 2) * w / 320)
-            top = int((y - bh / 2) * h / 320)
-            width = int(bw * w / 320)
-            height = int(bh * h / 320)
+            # IMPORTANT:
+            # Ignore every object except
+            # the object selected at startup.
 
-            boxes.append([left, top, width, height])
+            if class_id != target_class_id:
+                continue
+
+            left = int(
+                (x - bw / 2) * w / 320
+            )
+
+            top = int(
+                (y - bh / 2) * h / 320
+            )
+
+            width = int(
+                bw * w / 320
+            )
+
+            height = int(
+                bh * h / 320
+            )
+
+            boxes.append(
+                [left, top, width, height]
+            )
+
             scores.append(confidence)
+
             class_ids.append(class_id)
+
+        # -----------------------------
+        # NMS
+        # -----------------------------
 
         indices = cv2.dnn.NMSBoxes(
             boxes,
@@ -179,50 +221,37 @@ try:
 
         command = "S"
         area = 0
+        label = None
+        score = 0
 
-        detected = False
+        # -----------------------------
+        # BEST TARGET
+        # -----------------------------
 
         if len(indices) > 0:
 
-            detected = True
-
-            best = max(indices.flatten(), key=lambda i: scores[i])
+            best = max(
+                indices.flatten(),
+                key=lambda i: scores[i]
+            )
 
             x, y, bw, bh = boxes[best]
 
-            label = CLASS_NAMES[class_ids[best]]
+            label = CLASS_NAMES[
+                class_ids[best]
+            ]
+
             score = scores[best]
 
             area = bw * bh
 
             center_x = x + bw // 2
+
+            # -----------------------------
+            # DIRECTION
+            # -----------------------------
+
             relative_x = center_x / w
-
-            # ------------------------------------------------
-            # DRAW
-            # ------------------------------------------------
-
-            cv2.rectangle(
-                image,
-                (x, y),
-                (x + bw, y + bh),
-                (0, 255, 0),
-                2
-            )
-
-            cv2.putText(
-                image,
-                f"{label} {score:.2f}",
-                (x, y - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 0),
-                2
-            )
-
-            # ------------------------------------------------
-            # STEERING
-            # ------------------------------------------------
 
             if relative_x < LEFT_LIMIT:
 
@@ -236,146 +265,157 @@ try:
 
                 command = "F"
 
-            # ------------------------------------------------
-            # TARGET CONFIRMATION
-            # ------------------------------------------------
+            # -----------------------------
+            # DRAW DETECTION
+            # -----------------------------
 
-            centered = LEFT_LIMIT <= relative_x <= RIGHT_LIMIT
+            cv2.rectangle(
+                image,
+                (x, y),
+                (x + bw, y + bh),
+                (0, 255, 0),
+                2
+            )
 
-            if area >= STOP_AREA and centered:
+            cv2.putText(
+                image,
+                f"{label} {score:.2f}",
+                (x, max(y - 10, 20)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2
+            )
 
-                stop_counter += 1
+        # -----------------------------
+        # TARGET FOUND
+        # -----------------------------
 
-                print(
-                    f"Target confirmation "
-                    f"{stop_counter}/{STOP_CONFIRMATION}"
-                )
+        if area >= STOP_AREA:
 
-            else:
+            print()
+            print("=" * 55)
+            print("             TARGET CONFIRMED")
+            print("=" * 55)
 
-                stop_counter = 0
-
-        else:
-
-            stop_counter = 0
-            lost_counter += 1
-
-        # ----------------------------------------------------
-        # DEBUG OUTPUT
-        # ----------------------------------------------------
-
-        fps = 1 / (time.time() - start)
-
-        if detected:
-
-            print("-" * 55)
             print(f"Object      : {label}")
             print(f"Confidence  : {score:.2f}")
             print(f"Area        : {area}")
             print(f"Direction   : {command}")
-            print(f"FPS         : {fps:.1f}")
-            print("-" * 55)
 
-        else:
+            # -----------------------------
+            # SAVE EVIDENCE
+            # -----------------------------
 
-            print(f"Searching...    FPS = {fps:.1f}")
-        # ----------------------------------------------------
-        # TARGET REACHED
-        # ----------------------------------------------------
+            filename = "evidence/evidence.jpg"
 
-        if stop_counter >= STOP_CONFIRMATION:
-
-            filename = os.path.join(
-                SAVE_FOLDER,
-                "evidence.jpg"
+            saved = cv2.imwrite(
+                filename,
+                image
             )
 
-            cv2.imwrite(filename, image)
+            if saved:
 
-            print("\n" + "=" * 60)
-            print("TARGET CONFIRMED")
-            print(f"Object      : {label}")
-            print(f"Confidence  : {score:.2f}")
-            print(f"Area        : {area}")
-            print(f"Saved Image : {filename}")
-            print("=" * 60)
+                print(
+                    f"Saved Image : {filename}"
+                )
 
-            # ------------------------------------------------
-            # FUTURE FLASK NOTIFICATION
-            # ------------------------------------------------
+            else:
 
-            # notify_target_found(label, filename)
+                print(
+                    "ERROR: Could not save image!"
+                )
 
-            if ARDUINO:
+            print("=" * 55)
 
-                ser.write(b'T')
+            # -----------------------------
+            # STOP ROBOT
+            # -----------------------------
 
-                for _ in range(20):
-                    ser.write(b'S')
-                    time.sleep(0.05)
+            ser.write(b'T')
+
+            for _ in range(20):
+
+                ser.write(b'S')
+
+                time.sleep(0.05)
 
             print("Robot stopped.")
 
             break
 
-        # ----------------------------------------------------
-        # SEND COMMANDS TO ARDUINO
-        # ----------------------------------------------------
+        # -----------------------------
+        # PRINT STATUS
+        # -----------------------------
 
-        if ARDUINO:
+        print(
+            f"Target = {target_object:<8} "
+            f"Area = {area:<8} "
+            f"Command = {command}"
+        )
 
-            if detected:
+        # -----------------------------
+        # SEND COMMANDS
+        # -----------------------------
 
-                lost_counter = 0
+        if len(indices) > 0:
 
-                ser.write(b'T')
+            # Tracking mode
+            ser.write(b'T')
 
-                if command == "F":
+            if command == "F":
 
-                    ser.write(b'F')
+                ser.write(b'F')
 
-                elif command == "L":
+            elif command == "L":
 
-                    ser.write(b'L')
+                ser.write(b'L')
 
-                elif command == "R":
+            elif command == "R":
 
-                    ser.write(b'R')
-
-                else:
-
-                    ser.write(b'S')
+                ser.write(b'R')
 
             else:
 
-                if lost_counter < 4:
+                ser.write(b'S')
 
-                    ser.write(b'S')
+        else:
 
-                else:
+            # No target detected
+            # Autonomous search
+            ser.write(b'A')
 
-                    ser.write(b'A')
+        # -----------------------------
+        # FPS
+        # -----------------------------
 
-# ============================================================
-# CLEANUP
-# ============================================================
+        fps = 1 / (time.time() - start)
+
+        print(
+            f"FPS: {fps:.1f}"
+        )
+
+except KeyboardInterrupt:
+
+    print()
+    print("Search interrupted by user.")
 
 finally:
 
-    print("\nStopping SearchBot...")
+    print()
+    print("Stopping SearchBot...")
 
-    if ARDUINO:
+    # Multiple STOP commands
+    # for safety.
 
-        for _ in range(10):
+    for _ in range(10):
 
-            ser.write(b'S')
+        ser.write(b'S')
 
-            time.sleep(0.05)
-
-        ser.close()
+        time.sleep(0.05)
 
     cap.release()
 
-    cv2.destroyAllWindows()
+    ser.close()
 
     print("Finished.")
