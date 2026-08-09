@@ -104,7 +104,7 @@ os.makedirs("evidence", exist_ok=True)
 # -----------------------------
 # MAIN LOOP
 # -----------------------------
-
+target_confirmed = False
 try:
 
     while True:
@@ -332,16 +332,13 @@ try:
             # STOP ROBOT
             # -----------------------------
 
+            target_confirmed = True
+            print("Sending T to Arduino...")
             ser.write(b'T')
-
-            for _ in range(20):
-
-                ser.write(b'S')
-
-                time.sleep(0.05)
+            ser.flush()
 
             print("Robot stopped.")
-
+            time.sleep(1.2)
             break
 
         # -----------------------------
@@ -361,7 +358,7 @@ try:
         if len(indices) > 0:
 
             # Tracking mode
-            ser.write(b'T')
+            
 
             if command == "F":
 
@@ -407,12 +404,12 @@ finally:
 
     # Multiple STOP commands
     # for safety.
+    if not target_confirmed:
+      for _ in range(10):
 
-    for _ in range(10):
+         ser.write(b'S')
 
-        ser.write(b'S')
-
-        time.sleep(0.05)
+         time.sleep(0.05)
 
     cap.release()
 
