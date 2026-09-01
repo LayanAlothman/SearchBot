@@ -47,6 +47,13 @@ The robotic system combines a Raspberry Pi 4 and Arduino for processing and hard
 
 The complete system was evaluated through 30 real-world search trials.
 
+| Target | Success Rate |
+|---|---:|
+| Phone | 100% |
+| Key | 80% |
+| Glasses | 80% |
+| Overall | 86.67% |
+
 # Software & Technologies
 
 - Python
@@ -57,10 +64,3 @@ The complete system was evaluated through 30 real-world search trials.
 - Arduino
 - MIT App Inventor
 - Linux
-
-| Target | Success Rate |
-|---|---:|
-| Phone | 100% |
-| Key | 80% |
-| Glasses | 80% |
-| Overall | 86.67% |
