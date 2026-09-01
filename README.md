@@ -47,6 +47,17 @@ The robotic system combines a Raspberry Pi 4 and Arduino for processing and hard
 
 The complete system was evaluated through 30 real-world search trials.
 
+# Software & Technologies
+
+- Python
+- OpenCV
+- ONNX
+- ONNX Runtime
+- Flask
+- Arduino
+- MIT App Inventor
+- Linux
+
 | Target | Success Rate |
 |---|---:|
 | Phone | 100% |
