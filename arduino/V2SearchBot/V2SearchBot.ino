@@ -11,7 +11,7 @@ Ultrasonic ultrasonic;
 const int SEARCH_SPEED = 65;
 const int TRACK_SPEED  = 65;
 const int TURN_SPEED   = 65;
-
+const int BUZZER_PIN = A0;
 // Safety distance set to 20cm to protect the camera lens
 const int SAFE_DISTANCE = 20;
 
@@ -31,7 +31,8 @@ void setup()
 
     motor.begin();
     ultrasonic.begin();
-
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW);
    
     motor.stop();
 
@@ -108,12 +109,20 @@ else if (latest == 'F' ||
                 motor.smoothRight(TURN_SPEED);
                 break;
 
-            case 'T':
-                motor.stop();
-                delay(100);
-                
-                command = 'S'; // Reset to 'S' so it doesn't beep forever
-                break;
+case 'T':
+    motor.stop();
+    
+    // Target found - beep 3 times, 700 ms each
+    for (int i = 0; i < 3; i++)
+    {
+        tone(BUZZER_PIN, 1000);
+        delay(1000);
+        noTone(BUZZER_PIN);
+        delay(150);
+    }
+
+    command = 'S';
+    break;
 
             case 'S':
             default:
