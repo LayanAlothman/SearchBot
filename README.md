@@ -64,3 +64,20 @@ The complete system was evaluated through 30 real-world search trials.
 - Arduino
 - MIT App Inventor
 - Linux
+
+# Demo
+
+### Glasses Search
+SearchBot autonomously searches for and detects glasses.
+
+[Watch the Glasses Search Demo](https://youtube.com/shorts/0H4ts1x5ceo)
+
+### Key Search
+SearchBot autonomously searches for and detects a key.
+
+[Watch the Key Search Demo](https://youtube.com/shorts/InbMX-Fps0k)
+
+### Phone Search
+SearchBot autonomously searches for and detects a phone.
+
+[Watch the Phone Search Demo](https://youtube.com/shorts/y9gl5qsWRCY)
