@@ -1,5 +1,8 @@
 # SearchBot
+
 SearchBot is an autonomous mobile robot designed to search an indoor environment for predefined everyday objects using artificial intelligence and computer vision.
+
+<img width="306.75" height="267.25" alt="image" src="https://github.com/user-attachments/assets/767e9c6a-f7b5-4cae-8902-2d837dbf66a0" />
 
 # Overview
 
